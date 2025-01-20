@@ -68,14 +68,19 @@ class AnalyticsService
 
             $clientId = explode(':', $key)[1];
 
-            $clients[$clientId]['total_sessions']  = 0;
-            $clients[$clientId]['completed_sessions'] = 0;
+            if (!isset($clients[$clientId])) {
+                $clients[$clientId] = [
+                    'total_sessions' => 0,
+                    'completed_sessions' => 0,
+                ];
+            }
 
             if (str_contains($key, ':total_sessions')) {
                 $clients[$clientId]['total_sessions'] = (int) $value;
             } elseif (str_contains($key, ':completed_sessions')) {
                 $clients[$clientId]['completed_sessions'] = (int) $value;
             }
+
         }
 
         foreach ($clients as $clientId => $data) {
