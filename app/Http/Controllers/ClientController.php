@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Client;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
+use App\Events\ClientCreated;
+use App\Http\Resources\Client\ClientResource;
 use App\Models\User;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ class ClientController extends Controller
     public function index(Request $request)
     {
         $clients = Client::where('coach_id', $request->user()->id)->with('user')->paginate(10);
-        return response()->json($clients, 200);
+        return ClientResource::collection($clients);
     }
 
 
@@ -31,13 +32,15 @@ class ClientController extends Controller
                 'notes' => 'string|nullable',
             ]);
 
-            $client = DB::transaction(function () use ($validated, $request) {
+            $client_password = Hash::make('Test@1234');
+
+            $client = DB::transaction(function () use ($validated, $request, $client_password) {
 
                 $clientUser = User::create([
                     'name' => $validated['name'],
                     'email' => $validated['email'],
-                    'password' => Hash::make('Test@1234'),
-                    'role' => collect(config('enums.user_roles'))->search('client') ?? 2,
+                    'password' => $client_password,
+                    'role' => collect(config('enums.user_roles'))->search('client') ?? 3,
                 ]);
 
                 return  Client::create([
@@ -49,9 +52,10 @@ class ClientController extends Controller
                 ]);
             });
 
-            //TODO: Send Email notification to client for their new login details
+            //Send Email Notification to client
+            event(new ClientCreated($validated['name'], $validated['email'], $client_password));
 
-            return response()->json(['message' => 'Client created successfully', 'client' => $client], 201);
+            return response()->json(['message' => 'Client created successfully', 'client' => new ClientResource($client)], 201);
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Validation failed' ,'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
@@ -86,7 +90,7 @@ class ClientController extends Controller
 
             return response()->json([
                 'message' => 'Client updated successfully',
-                'client' => $client->load('coach'),
+                'client' => new ClientResource($client),
             ]);
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Validation failed' ,'errors' => $e->errors()], 422);

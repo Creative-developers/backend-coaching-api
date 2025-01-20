@@ -35,6 +35,8 @@ class AuthRequest extends FormRequest
                     ->numbers()
                     ->symbols(),
             ],
+            'role' => 'sometimes',
+            'status' => 'sometimes',
         ];
     }
 

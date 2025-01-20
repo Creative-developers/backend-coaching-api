@@ -14,6 +14,7 @@ return new class () extends Migration {
             $table->id();
             $table->foreignId('coach_id')->constrained('users')->cascadeOnDelete();
             $table->foreignId('client_id')->constrained('clients')->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->date('session_date');
             $table->dateTime('completed_at')->nullable();
             $table->tinyInteger('status')->index()->default(array_search('scheduled', config('enums.client_session_status', [])));

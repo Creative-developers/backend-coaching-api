@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\Auth\AuthRequest;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Resources\Auth\AuthResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
@@ -19,11 +20,12 @@ class AuthController extends Controller
             //by default role will be coach unless provided in the $request
             $validatedData = $request->validated();
             $validatedData['password'] = Hash::make($validatedData['password']);
+            $validatedData['role'] = collect(config('enums.user_roles'))->search('coach') ?? 2;
 
             $user = User::create($validatedData);
+            $user->refresh();
 
-            //TODO: replace it with resource method
-            return response()->json(['success' => true, 'message' => 'User Created Successfuly', 'data' => $user], 201);
+            return response()->json(['success' => true, 'message' => 'User Created Successfuly', 'data' => new AuthResource($user)], 201);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
@@ -50,12 +52,10 @@ class AuthController extends Controller
 
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            //TODO: replace it with resource method
-
             return response()->json([
                 'success' => true,
                 'token' => $token,
-                'data' => $user,
+                'data' => new AuthResource($user),
             ]);
         } catch (ValidationException $e) {
             return response()->json([

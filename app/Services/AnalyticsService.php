@@ -59,15 +59,21 @@ class AnalyticsService
         $totalSessions = Redis::get("{$coachKey}:total_sessions") ?? 0;
         $completedSessions = Redis::get("{$coachKey}:completed_sessions") ?? 0;
 
+
+
         $clientsData = Redis::hGetAll("{$coachKey}:clients");
 
         $clients = [];
         foreach ($clientsData as $key => $value) {
+
+            $clientId = explode(':', $key)[1];
+
+            $clients[$clientId]['total_sessions']  = 0;
+            $clients[$clientId]['completed_sessions'] = 0;
+
             if (str_contains($key, ':total_sessions')) {
-                $clientId = explode(':', $key)[1];
                 $clients[$clientId]['total_sessions'] = (int) $value;
             } elseif (str_contains($key, ':completed_sessions')) {
-                $clientId = explode(':', $key)[1];
                 $clients[$clientId]['completed_sessions'] = (int) $value;
             }
         }
@@ -80,7 +86,7 @@ class AnalyticsService
 
         return [
             'total_sessions' => $totalSessions,
-            'completed_sessions' => $completedSessions,
+            'completed_sessions' => $completedSessions ?? 0,
             'clients' => $clients,
         ];
     }

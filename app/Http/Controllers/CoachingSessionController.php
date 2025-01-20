@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Services\AnalyticsService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use App\Models\Client;
 
 class CoachingSessionController extends Controller
 {
@@ -20,12 +22,38 @@ class CoachingSessionController extends Controller
     {
         try {
             $validated = $request->validate([
-                'client_id' => 'required|exists:clients,id',
-                'session_date' => 'required|date',
+                'client_id' => [
+                     'required',
+                     'exists:clients,id',
+                     function ($attribute, $value, $fail) use ($request) {
+                         if (!$request->user()->clients()->where('id', $value)->exists()) {
+                             $fail('Client must be associated with the current coach');
+                         }
+                     }
+                ],
+                'session_date' => [
+                    'required',
+                    'date',
+                    function ($attribute, $value, $fail) use ($request) {
+                        $existingSession = CoachingSession::where('coach_id', $request->user()->id)
+                        ->where('session_date', $value)
+                        ->where('status', '!=', 'completed')
+                        ->exists();
+
+                        Log::info('coaching-session: Session is already booked on this date ' . $request->date . ' with client ' . $request->client_id . ' and coach ' . $request->user()->id);
+
+                        if ($existingSession) {
+                            $fail('Another session is already scheduled on this date.');
+                        }
+                    }
+                ]
             ]);
 
             $session = DB::transaction(function () use ($validated, $request, $analyticsService) {
 
+
+                $client = Client::find($validated['client_id']);
+                $userId = $client->user_id;
 
                 // Update session stats in redis
                 $analyticsService->updateSession($request->user()->id, $validated['client_id']);
@@ -33,6 +61,7 @@ class CoachingSessionController extends Controller
                 return CoachingSession::create([
                     'coach_id' => $request->user()->id,
                     'client_id' => $validated['client_id'],
+                    'user_id' => $userId,
                     'session_date' => $validated['session_date'],
                     'role' => collect(config('enums.client_session_status'))->search('scheduled') ?? 1,
                 ]);
@@ -46,12 +75,27 @@ class CoachingSessionController extends Controller
         }
     }
 
-    // Update session details
     public function update(Request $request, CoachingSession $coachingSession, AnalyticsService $analyticsService)
     {
         try {
             $validated = $request->validate([
-                'session_date' => 'sometimes|date',
+                'session_date' => [
+                    'sometimes',
+                    'date',
+                    function ($attribute, $value, $fail) use ($request) {
+                        $existingSession = CoachingSession::where('coach_id', $request->user()->id)
+                        ->where('session_date', $value)
+                        ->where('status', '!=', 'completed')
+                        ->exists();
+
+                        if ($existingSession) {
+                            $fail('Another session is already scheduled on this date.');
+                        }
+
+                        Log::info('coaching-session: Session is already booked on this date ' . $request->date . ' with client ' . $request->client_id . ' and coach ' . $request->user()->id);
+
+                    }
+                ]
             ]);
 
             if ($coachingSession->status !== array_search('completed', config('enums.client_session_status', []))) {
@@ -61,6 +105,8 @@ class CoachingSessionController extends Controller
 
                     // Update session stats in redis
                     $analyticsService->markSessionAsCompleted($request->user()->id, $coachingSession->client_id);
+
+                    Log::info("Client {$request->client_id} session with coach {$request->user()->id} is successfully completed at {$validated['completed_at']}");
 
                 }
             }

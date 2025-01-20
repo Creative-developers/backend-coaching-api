@@ -10,8 +10,9 @@ return [
 
 
     'user_roles' => [
-        1 => 'coach',
-        2 => 'client'
+        1 => 'admin',
+        2 => 'coach',
+        3 => 'client',
     ],
 
     'client_status' => [
